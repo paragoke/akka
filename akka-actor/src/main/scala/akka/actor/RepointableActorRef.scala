@@ -154,6 +154,12 @@ private[akka] class RepointableActorRef(
       }
     } else this
 
+  /**
+   * Method for looking up a single child beneath this actor.
+   * It is racy if called from the outside.
+   */
+  def getSingleChild(name: String): InternalActorRef = lookup.getSingleChild(name)
+
   def !(message: Any)(implicit sender: ActorRef = Actor.noSender) = underlying.sendMessage(message, sender)
 
   def sendSystemMessage(message: SystemMessage) = underlying.sendSystemMessage(message)
@@ -204,6 +210,7 @@ private[akka] class UnstartedCell(val systemImpl: ActorSystemImpl,
   def parent: InternalActorRef = supervisor
   def childrenRefs: ChildrenContainer = ChildrenContainer.EmptyChildrenContainer
   def getChildByName(name: String): Option[ChildRestartStats] = None
+  override def getSingleChild(name: String): InternalActorRef = Nobody
 
   def sendMessage(msg: Envelope): Unit = {
     if (lock.tryLock(timeout.length, timeout.unit)) {

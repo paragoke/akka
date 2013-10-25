@@ -348,14 +348,7 @@ private[akka] class LocalActorRef private[akka] (
    * to inject “synthetic” actor paths like “/temp”.
    * It is racy if called from the outside.
    */
-  def getSingleChild(name: String): InternalActorRef = {
-    val (childName, uid) = ActorCell.splitNameAndUid(name)
-    actorCell.getChildByName(childName) match {
-      case Some(crs: ChildRestartStats) if uid == ActorCell.undefinedUid || uid == crs.uid ⇒
-        crs.child.asInstanceOf[InternalActorRef]
-      case _ ⇒ Nobody
-    }
-  }
+  def getSingleChild(name: String): InternalActorRef = actorCell.getSingleChild(name)
 
   override def getChild(names: Iterator[String]): InternalActorRef = {
     /*
@@ -507,11 +500,11 @@ private[akka] class EmptyLocalActorRef(override val provider: ActorRefProvider,
     case Identify(messageId) ⇒
       sender ! ActorIdentity(messageId, None)
       true
-    case s: SelectChildName ⇒
-      s.identifyRequest match {
+    case sel: ActorSelectionMessage ⇒
+      sel.identifyRequest match {
         case Some(identify) ⇒ sender ! ActorIdentity(identify.messageId, None)
         case None ⇒
-          eventStream.publish(DeadLetter(s.wrappedMessage, if (sender eq Actor.noSender) provider.deadLetters else sender, this))
+          eventStream.publish(DeadLetter(sel.msg, if (sender eq Actor.noSender) provider.deadLetters else sender, this))
       }
       true
     case _ ⇒ false

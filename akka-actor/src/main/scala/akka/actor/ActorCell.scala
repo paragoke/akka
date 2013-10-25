@@ -244,6 +244,12 @@ private[akka] trait Cell {
   def getChildByName(name: String): Option[ChildStats]
 
   /**
+   * Method for looking up a single child beneath this actor.
+   * It is racy if called from the outside.
+   */
+  def getSingleChild(name: String): InternalActorRef
+
+  /**
    * Enqueue a message to be sent to the actor; may or may not actually
    * schedule the actor to run, depending on which type of cell it is.
    * Is only allowed to throw Fatal Throwables.
@@ -471,29 +477,60 @@ private[akka] class ActorCell(
       case AddressTerminated(address) ⇒ addressTerminated(address)
       case Kill                       ⇒ throw new ActorKilledException("Kill")
       case PoisonPill                 ⇒ self.stop()
-      case SelectParent(m) ⇒
-        if (self == system.provider.rootGuardian) self.tell(m, msg.sender)
-        else parent.tell(m, msg.sender)
-      case s @ SelectChildName(name, m) ⇒
-        def selectChild(): Unit = {
-          getChildByName(name) match {
-            case Some(c: ChildRestartStats) ⇒ c.child.tell(m, msg.sender)
-            case _ ⇒
-              s.identifyRequest foreach { x ⇒ sender ! ActorIdentity(x.messageId, None) }
-          }
-        }
-        // need this special case because of extraNames handled by rootGuardian
-        if (self == system.provider.rootGuardian) {
-          self.asInstanceOf[LocalActorRef].getSingleChild(name) match {
-            case Nobody ⇒ selectChild()
-            case child  ⇒ child.tell(m, msg.sender)
-          }
-        } else
-          selectChild()
-      case SelectChildPattern(p, m) ⇒ for (c ← children if p.matcher(c.path.name).matches) c.tell(m, msg.sender)
-      case Identify(messageId)      ⇒ sender ! ActorIdentity(messageId, Some(self))
+      case sel: ActorSelectionMessage ⇒ receiveSelection(sel)
+      case Identify(messageId)        ⇒ sender ! ActorIdentity(messageId, Some(self))
     }
   }
+
+  private def receiveSelection(sel: ActorSelectionMessage): Unit =
+    if (sel.elements.isEmpty)
+      self.tell(sel.msg, sender)
+    else {
+      val iter = sel.elements.iterator
+      /*
+       * The idea is to recursively descend as far as possible with local
+       * refs and hand over to that “foreign” child when we encounter it.
+       */
+      @tailrec def rec(ref: InternalActorRef): Unit = {
+        ref match {
+          case _: LocalActorRef | _: RepointableActorRef ⇒
+            iter.next() match {
+              case SelectParent ⇒
+                val parent = ref.getParent
+                if (iter.isEmpty)
+                  parent.tell(sel.msg, sender)
+                else
+                  rec(parent)
+              case SelectChildName(name) ⇒
+                val child = ref match {
+                  case l: LocalActorRef       ⇒ l.getSingleChild(name)
+                  case r: RepointableActorRef ⇒ r.getSingleChild(name)
+                }
+                if (child == Nobody)
+                  sel.identifyRequest foreach { x ⇒ sender ! ActorIdentity(x.messageId, None) }
+                else if (iter.isEmpty)
+                  child.tell(sel.msg, sender)
+                else
+                  rec(child)
+              case SelectChildPattern(p) ⇒
+                // fan-out when there is a wildcard
+                val chldr = ref match {
+                  case l: LocalActorRef       ⇒ l.underlying.children
+                  case r: RepointableActorRef ⇒ r.lookup.childrenRefs.children
+                }
+                val m = if (iter.isEmpty) sel.msg else sel.copy(elements = iter.toVector)
+                for (c ← chldr if p.matcher(c.path.name).matches)
+                  c.tell(m, sender)
+            }
+
+          case _ ⇒
+            // foreign ref, continue by sending ActorSelectionMessage to it with remaining elements
+            ref.tell(sel.copy(elements = iter.toVector), sender)
+        }
+      }
+
+      rec(self)
+    }
 
   final def receiveMessage(msg: Any): Unit = actor.aroundReceive(behaviorStack.head, msg)
 

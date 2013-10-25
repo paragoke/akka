@@ -36,16 +36,12 @@ abstract class ActorSelection extends Serializable {
   def tell(msg: Any): Unit = tell(msg, Actor.noSender)
 
   def tell(msg: Any, sender: ActorRef): Unit = {
-    @tailrec def toMessage(msg: Any, path: immutable.IndexedSeq[AnyRef], index: Int): Any =
-      if (index < 0) msg
-      else toMessage(
-        path(index) match {
-          case ".."             ⇒ SelectParent(msg)
-          case s: String        ⇒ SelectChildName(s, msg)
-          case p: PatternHolder ⇒ SelectChildPattern(p.pat, msg)
-        }, path, index - 1)
-
-    anchor.tell(toMessage(msg, path, path.length - 1), sender)
+    val elements = path map {
+      case ".."             ⇒ SelectParent
+      case s: String        ⇒ SelectChildName(s)
+      case p: PatternHolder ⇒ SelectChildPattern(p.pat)
+    }
+    anchor.tell(ActorSelectionMessage(msg, elements), sender)
   }
 
   /**
