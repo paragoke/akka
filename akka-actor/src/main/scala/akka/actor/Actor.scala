@@ -125,53 +125,6 @@ case object ReceiveTimeout extends ReceiveTimeout {
 }
 
 /**
- * INTERNAL API
- * ActorRefFactory.actorSelection returns a ActorSelection which sends these
- * nested path descriptions whenever using ! on them, the idea being that the
- * message is delivered by traversing the various actor paths involved.
- */
-@SerialVersionUID(1L)
-private[akka] case class ActorSelectionMessage(msg: Any, elements: immutable.Iterable[SelectionPathElement])
-  extends AutoReceivedMessage with PossiblyHarmful {
-
-  def identifyRequest: Option[Identify] = msg match {
-    case x: Identify ⇒ Some(x)
-    case _           ⇒ None
-  }
-}
-
-/**
- * INTERNAL API
- */
-@SerialVersionUID(1L)
-private[akka] sealed trait SelectionPathElement
-
-/**
- * INTERNAL API
- */
-@SerialVersionUID(2L)
-private[akka] case class SelectChildName(name: String) extends SelectionPathElement
-
-/**
- * INTERNAL API
- */
-@SerialVersionUID(2L)
-private[akka] case class SelectChildPattern(pattern: Pattern) extends SelectionPathElement {
-  override def equals(other: Any): Boolean = other match {
-    case SelectChildPattern(otherPattern) ⇒ pattern.toString == pattern.toString
-    case _                                ⇒ false
-  }
-
-  override def hashCode: Int = pattern.toString.hashCode
-}
-
-/**
- * INTERNAL API
- */
-@SerialVersionUID(2L)
-private[akka] case object SelectParent extends SelectionPathElement
-
-/**
  * IllegalActorStateException is thrown when a core invariant in the Actor implementation has been violated.
  * For instance, if you try to create an Actor that doesn't extend Actor.
  */

@@ -4,7 +4,6 @@
 package akka.remote.serialization
 
 import scala.collection.immutable
-import java.util.regex.Pattern
 import com.google.protobuf.ByteString
 import akka.actor.ActorSelectionMessage
 import akka.actor.ExtendedActorSystem
@@ -42,8 +41,8 @@ class MessageContainerSerializer(val system: ExtendedActorSystem) extends Serial
     sel.elements.foreach {
       case SelectChildName(name) ⇒
         builder.addPattern(buildPattern(Some(name), CHILD_NAME))
-      case SelectChildPattern(pattern) ⇒
-        builder.addPattern(buildPattern(Some(pattern.toString), CHILD_PATTERN))
+      case SelectChildPattern(patternStr) ⇒
+        builder.addPattern(buildPattern(Some(patternStr), CHILD_PATTERN))
       case SelectParent ⇒
         builder.addPattern(buildPattern(None, PARENT))
     }
@@ -69,7 +68,7 @@ class MessageContainerSerializer(val system: ExtendedActorSystem) extends Serial
     val elements: immutable.Iterable[SelectionPathElement] = selectionEnvelope.getPatternList.asScala.map { x ⇒
       x.getType match {
         case CHILD_NAME    ⇒ SelectChildName(x.getMatcher)
-        case CHILD_PATTERN ⇒ SelectChildPattern(Pattern.compile(x.getMatcher))
+        case CHILD_PATTERN ⇒ SelectChildPattern(x.getMatcher)
         case PARENT        ⇒ SelectParent
       }
 

@@ -122,27 +122,28 @@ private[akka] class RemoteSystemDaemon(
       }
 
     case sel: ActorSelectionMessage ⇒
-      val concatinatedChildNames = {
+      val (concatenatedChildNames, m) = {
         val iter = sel.elements.iterator
-        @tailrec def rec(acc: List[String]): List[String] =
+        // find child elements, and the message to send, which is a remaining ActorSelectionMessage
+        // in case of SelectChildPattern, otherwise the the actual message of the selection
+        @tailrec def rec(acc: List[String]): (List[String], Any) =
           if (iter.isEmpty)
-            acc.reverse
+            (acc.reverse, sel.msg)
           else {
             iter.next() match {
               case SelectChildName(name)       ⇒ rec(name :: acc)
               case SelectParent if acc.isEmpty ⇒ rec(acc)
               case SelectParent                ⇒ rec(acc.tail)
-              case SelectChildPattern(_) ⇒
-                throw new IllegalArgumentException("SelectChildPattern not allowed in ActorSelection via remote deployed actor")
+              case pat: SelectChildPattern     ⇒ (acc.reverse, sel.copy(elements = pat +: iter.toVector))
             }
           }
         rec(Nil)
       }
-      getChild(concatinatedChildNames.iterator) match {
+      getChild(concatenatedChildNames.iterator) match {
         case Nobody ⇒
           sel.identifyRequest foreach { x ⇒ sender ! ActorIdentity(x.messageId, None) }
         case child ⇒
-          child.tell(sel.msg, sender)
+          child.tell(m, sender)
       }
 
     case Identify(messageId) ⇒ sender ! ActorIdentity(messageId, Some(this))

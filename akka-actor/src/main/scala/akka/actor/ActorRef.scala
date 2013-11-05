@@ -4,6 +4,7 @@
 
 package akka.actor
 
+import scala.collection.immutable
 import akka.dispatch._
 import akka.dispatch.sysmsg._
 import java.lang.{ UnsupportedOperationException, IllegalStateException }
@@ -266,6 +267,8 @@ private[akka] abstract class InternalActorRef extends ActorRef with ScalaActorRe
  */
 private[akka] abstract class ActorRefWithCell extends InternalActorRef { this: ActorRefScope ⇒
   def underlying: Cell
+  def children: immutable.Iterable[ActorRef]
+  def getSingleChild(name: String): InternalActorRef
 }
 
 /**
@@ -342,6 +345,8 @@ private[akka] class LocalActorRef private[akka] (
   override def getParent: InternalActorRef = actorCell.parent
 
   override def provider: ActorRefProvider = actorCell.provider
+
+  def children: immutable.Iterable[ActorRef] = actorCell.children
 
   /**
    * Method for looking up a single child beneath this actor. Override in order

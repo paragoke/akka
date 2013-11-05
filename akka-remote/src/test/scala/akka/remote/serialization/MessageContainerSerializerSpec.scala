@@ -27,7 +27,7 @@ class MessageContainerSerializerSpec extends AkkaSpec {
     "serialize and de-serialize ActorSelectionMessage" in {
       verifySerialization(ActorSelectionMessage("hello", Vector(
         SelectChildName("user"), SelectChildName("a"), SelectChildName("b"), SelectParent,
-        SelectChildPattern(Helpers.makePattern("*")), SelectChildName("c"))))
+        SelectChildPattern("*"), SelectChildName("c"))))
     }
 
     def verifySerialization(msg: AnyRef): Unit = {

@@ -484,53 +484,9 @@ private[akka] class ActorCell(
 
   private def receiveSelection(sel: ActorSelectionMessage): Unit =
     if (sel.elements.isEmpty)
-      self.tell(sel.msg, sender)
-    else {
-      val iter = sel.elements.iterator
-      /*
-       * The idea is to recursively descend as far as possible with local
-       * refs and hand over to that “foreign” child when we encounter it.
-       */
-      @tailrec def rec(ref: InternalActorRef): Unit = {
-        ref match {
-          case _: LocalActorRef | _: RepointableActorRef ⇒
-            iter.next() match {
-              case SelectParent ⇒
-                val parent = ref.getParent
-                if (iter.isEmpty)
-                  parent.tell(sel.msg, sender)
-                else
-                  rec(parent)
-              case SelectChildName(name) ⇒
-                val child = ref match {
-                  case l: LocalActorRef       ⇒ l.getSingleChild(name)
-                  case r: RepointableActorRef ⇒ r.getSingleChild(name)
-                }
-                if (child == Nobody)
-                  sel.identifyRequest foreach { x ⇒ sender ! ActorIdentity(x.messageId, None) }
-                else if (iter.isEmpty)
-                  child.tell(sel.msg, sender)
-                else
-                  rec(child)
-              case SelectChildPattern(p) ⇒
-                // fan-out when there is a wildcard
-                val chldr = ref match {
-                  case l: LocalActorRef       ⇒ l.underlying.children
-                  case r: RepointableActorRef ⇒ r.lookup.childrenRefs.children
-                }
-                val m = if (iter.isEmpty) sel.msg else sel.copy(elements = iter.toVector)
-                for (c ← chldr if p.matcher(c.path.name).matches)
-                  c.tell(m, sender)
-            }
-
-          case _ ⇒
-            // foreign ref, continue by sending ActorSelectionMessage to it with remaining elements
-            ref.tell(sel.copy(elements = iter.toVector), sender)
-        }
-      }
-
-      rec(self)
-    }
+      invoke(Envelope(sel.msg, sender, system))
+    else
+      ActorSelection.deliverSelection(self, sender, sel)
 
   final def receiveMessage(msg: Any): Unit = actor.aroundReceive(behaviorStack.head, msg)
 

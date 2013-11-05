@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import scala.annotation.tailrec
+import scala.collection.immutable
 
 import akka.actor.dungeon.ChildrenContainer
 import akka.event.Logging.Warning
@@ -159,6 +160,8 @@ private[akka] class RepointableActorRef(
    * It is racy if called from the outside.
    */
   def getSingleChild(name: String): InternalActorRef = lookup.getSingleChild(name)
+
+  def children: immutable.Iterable[ActorRef] = lookup.childrenRefs.children
 
   def !(message: Any)(implicit sender: ActorRef = Actor.noSender) = underlying.sendMessage(message, sender)
 
